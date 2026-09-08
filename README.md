@@ -4,76 +4,125 @@ An end-to-end physics-to-cyber-physical simulation evaluating the **security and
 
 ---
 
-## 🚀 Quick Start
+## 📌 1. What the Project Does
 
-### 1. Launch the Interactive Web Dashboard (Streamlit)
-Features interactive distance testing sliders, dual-curve distance vs security margin plots, dynamic boundary maps, and live microgrid event console:
+Modern smart microgrids require ultra-fast, real-time command dispatch from the **Microgrid Control Center (MGCC)** to distributed energy resources (DERs, solar inverters, battery storage). To prevent cyberattacks, every command packet must be encrypted using AES-256 symmetric keys generated via **Quantum Key Distribution (QKD)**.
+
+### The Problem:
+- Optical fiber suffers attenuation ($-0.2\text{ dB/km}$).
+- As the distance ($L$) between the quantum transmitter and the microgrid substation grows, the photon transmission rate decays exponentially, causing the **Secret Key Rate ($R_{sk}$)** to crash.
+- If command traffic ($N_{pkt} \times 256\text{ bps}$) exceeds key generation, the **Key Pool exhausts to zero**, halting control commands and destabilizing the microgrid!
+
+### The Solution Simulated:
+1. **Distance Security Modeling:** Accurately identifies the **Critical Distance Limit ($L_{crit}$)** beyond which a given microgrid traffic demand cannot be sustained.
+2. **Key Pool Sharing (KPS):** Implements a cross-substation buffering protocol where the critical primary pool (Pool A) dynamically borrows keys from a reserve pool (Pool B) during deficits, preventing microgrid blackout.
+
+---
+
+## 🏛️ 2. System Architecture
+
+The simulator is built using a **Modular 3-Tier Layered Architecture**:
+
+```
++-------------------------------------------------------------------------+
+|                  PRESENTATION & VISUALIZATION LAYER                     |
+|  - Streamlit Web Dashboard (app_streamlit.py)                           |
+|  - Native Tkinter Desktop GUI (app_gui.py)                              |
+|  - CLI Automated Demonstrator (main.py)                                 |
++------------------------------------+------------------------------------+
+                                     |
+                                     v
++------------------------------------+------------------------------------+
+|               CYBER-PHYSICAL GRID CONTROLLER LAYER                      |
+|                      (grid_controller.py)                               |
+|  - MGCC P/Q Command Generation (Packets/sec * 256 bits)                 |
+|  - Real-Time Key Pool Tracking (Pool A Balance)                         |
+|  - Key Pool Sharing (KPS) Engine (Borrow from Pool B if Pool A < 5000b) |
+|  - Security & Stability State Machine (SECURE / FAILED)                 |
++------------------------------------+------------------------------------+
+                                     |
+                                     v
++------------------------------------+------------------------------------+
+|                      QUANTUM PHYSICS ENGINE                             |
+|                        (qkd_engine.py)                                  |
+|  - Optical Fiber Loss (0.2 dB/km Attenuation)                           |
+|  - Decoy-State BB84 Detection Probability & Bob Receiver Efficiency     |
+|  - QBER & Binary Shannon Entropy Privacy Amplification                  |
+|  - Asymptotic Secret Key Rate R_sk (bits/second)                        |
++-------------------------------------------------------------------------+
+```
+
+---
+
+## 🔄 3. End-to-End System Flowchart
+
+```mermaid
+flowchart TD
+    subgraph Physics_Engine ["Phase 1: QKD Physics Engine (qkd_engine.py)"]
+        A[Transmission Distance L km] --> B["Calculate Fiber Transmittance: eta_tr = 10^(-0.2 * L / 10)"]
+        B --> C["Detection Probability: r_k = 1 - (1-2*pdc)*exp(-eta_tr*eta_bob*k1)"]
+        C --> D["Calculate Gain & Optical QBER"]
+        D --> E{"QBER >= 11% ?"}
+        E -- Yes --> F["EVE DETECTED! Drop Link (R_sk = 0)"]
+        E -- No --> G["Compute Shannon Entropy h(e)"]
+        G --> H["Secret Key Rate: R_sk = vs * Gain * (1 - 2*h(e))"]
+    end
+
+    subgraph Grid_Controller ["Phase 2: Microgrid Controller (grid_controller.py)"]
+        H --> I["Key Pool Influx: Pool A += R_sk"]
+        J["MGCC Traffic Demand: freq * 256 bps"] --> K["Key Consumption: Pool A -= Consumption"]
+        I --> K
+        K --> L{"Pool A < 5,000 bits?"}
+        L -- Yes & KPS On --> M["KPS Triggered: Borrow 1,000b from Pool B"]
+        M --> N{"Pool A <= 0 ?"}
+        L -- No --> N
+        N -- Yes --> O["[FAILED] Key Exhaustion! Microgrid Commands Stalled"]
+        N -- No --> P["[SECURE] Microgrid P/Q Control Synchronized"]
+    end
+
+    subgraph User_Interface ["Phase 3: Interactive Visualizer (app_streamlit.py / app_gui.py)"]
+        O --> Q["Live Dashboard & Telemetry Cards"]
+        P --> Q
+        Q --> R["Distance Sensitivity Curve (Gen vs Demand)"]
+        Q --> S["Net Security Margin Plot (+/- bps)"]
+        Q --> T["Event Log Console ([SECURE] / [KPS BORROW] / [FAILED])"]
+    end
+```
+
+---
+
+## ⚙️ 4. Mathematical Implementation
+
+| Step | Metric | Formula | Meaning |
+|---|---|---|---|
+| 1 | **Transmittance** | $\eta_{tr} = 10^{-0.2 L / 10}$ | Optical photon survival probability over distance $L$ km. |
+| 2 | **Detection Rate** | $r_k = 1 - (1 - 2p_{dc}) e^{-\eta_{tr} \eta_{bob} k_1}$ | Expected photon click rate at Bob's detector. |
+| 3 | **Gain & Noise** | $\text{Gain} = r_k \cdot p_x^2$, $\text{QBER} = e_{mis} + \frac{p_{dc}}{\text{Gain}}$ | Signal rate and error fraction from misalignment and dark noise. |
+| 4 | **Shannon Entropy** | $h(e) = -e \log_2(e) - (1-e) \log_2(1-e)$ | Information leakage bounding eavesdropper knowledge. |
+| 5 | **Secret Key Rate** | $R_{sk} = \nu_s \cdot \text{Gain} \cdot [1 - 2 h(e)]$ | Net extractable secure bits generated per second. |
+| 6 | **Grid Consumption** | $R_{cons} = f_{pkt} \times 256\text{ bps}$ | Key consumption for AES-256 setpoint encryption. |
+| 7 | **Security Margin** | $\Delta R = R_{sk} - R_{cons}$ | Positive = Safe surplus; Negative = Impending exhaustion. |
+
+---
+
+## 🚀 5. Quick Start
+
+### 1. Web Dashboard (Streamlit)
 ```bash
 python -m streamlit run app_streamlit.py
 ```
 
-### 2. Launch the Standalone Desktop GUI (Tkinter)
-Native desktop application with zero external browser dependencies:
+### 2. Standalone Desktop GUI (Tkinter)
 ```bash
 python app_gui.py
 ```
 
-### 3. Run the Distance Sensitivity Test Suite (CLI)
-Executes distance sensitivity sweeps, failure limits, KPS borrowing, and saves boundary maps:
+### 3. CLI Demonstration Suite
 ```bash
 python main.py
 ```
 
-### 4. Run the Automated Unit Test Suite
+### 4. Automated Unit Tests
 ```bash
 python test_simulation.py
 ```
-
----
-
-## 🏗️ Architecture & Modules
-
-| File | Component | Description |
-|---|---|---|
-| [`qkd_engine.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/qkd_engine.py) | **The Physics Engine** | Implements optical fiber transmittance ($\eta_{tr} = 10^{-0.2L/10}$), detection probability ($r_k$), decoy gain, QBER, Shannon entropy $h(e)$, and asymptotic secret key rate ($R_{sk}$). |
-| [`grid_controller.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/grid_controller.py) | **The Grid Consumer** | Simulates an MGCC dispatching AES-256 encrypted P/Q commands ($N_{pkt} \times 256\text{ bps}$). Implements Key Pool Sharing (KPS) borrowing between Pool A and Pool B. |
-| [`sensitivity_suite.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/sensitivity_suite.py) | **The Analysis Suite** | Sweeps distances ($1-100\text{ km}$) across multiple traffic frequencies, exporting boundary maps. |
-| [`app_streamlit.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/app_streamlit.py) | **Web Dashboard** | **MICROGRID STABILITY SIMULATOR** Streamlit application with dedicated Distance Security Testing tab. |
-| [`app_gui.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/app_gui.py) | **Desktop GUI** | Tkinter & embedded Matplotlib native desktop interface. |
-| [`main.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/main.py) | **CLI Demonstrator** | Automated test harness for short, medium, critical, and long distance links. |
-| [`test_simulation.py`](file:///c:/Users/Vishal%20Agrahari/powergridMinorProject/test_simulation.py) | **Unit Test Suite** | 6 automated unit tests validating physics and failure modes. |
-
----
-
-## 🔬 Hardware Parameters (From Table I)
-
-- **Bob Detector Efficiency ($\eta_{bob}$):** $0.1$ ($10\%$)
-- **Dark Count Probability ($p_{dc}$):** $10^{-11}$
-- **Optical Misalignment ($e_{mis}$):** $5 \times 10^{-4}$ ($0.05\%$)
-- **Laser Pulse Frequency ($\nu_s$):** $40 \text{ MHz}$ ($4 \times 10^7 \text{ pulses/sec}$)
-- **Block Size ($B$):** $10^7$
-- **Error Correction Factor ($f_{ec}$):** $1.16$
-- **Decoy State Intensities:** $\mu_1 = 0.4$ (Signal), $\mu_2 = 0.1$ (Decoy), $\mu_3 = 0.007$ (Vacuum)
-- **Basis Selection Probability ($p_x$):** $0.5$
-
----
-
-## 🎓 Academic Defense & Examiner Guide
-
-### 1. Normal Case ($L = 10\text{ km}$)
-- Key rate is robust (~$246\text{ kbps}$), far exceeding moderate MGCC traffic demands ($30\text{ pkts/s} \times 256\text{b} = 7.68\text{ kbps}$).
-- Key pool grows steadily; status is **`[SECURE]`**.
-
-### 2. The "Quantum Wall" ($L = 70\text{ km}$)
-- Fiber attenuation ($0.2\text{ dB/km}$) reduces transmittance to $0.0398$ ($-14\text{ dB}$).
-- Secret key rate drops to ~$15.7\text{ kbps}$.
-- At high control frequencies ($100\text{ pkts/s} = 25.6\text{ kbps}$), key demand exceeds generation. The pool drains to zero, triggering **`[FAILED (Key Exhaustion)]`**.
-
-### 3. Eve Intercept-Resend Attack ($e_{mis} \ge 0.10$)
-- An active eavesdropper measuring qubits in random bases introduces state disturbances.
-- As $e_{mis} \to 10\%$, key rate collapses by $>93\%$.
-- When observed QBER crosses the **$11.0\%$ threshold**, Shannon entropy $h(e) \ge 0.5$, making $1 - 2h(e) \le 0$. Privacy amplification fails, and the system logs **`[CRITICAL] Eve Detected! QBER > 11%. Dropping Link`**.
-
-### 4. Key Pool Sharing (KPS) Novelty (Paper 1)
-- If Pool A drops below safety threshold ($< 5,000\text{ bits}$), it autonomously borrows $1,000\text{ bits}$ from backup Pool B.
-- Prevents MGCC command stalling during transient deficits and rescues microgrid stability.
